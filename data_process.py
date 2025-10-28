@@ -37,7 +37,7 @@ for root, dirs, files in os.walk(data_dir_path + "/stage_2_train_images/"):
         if name.endswith((".dcm")):
             count += 1
             ds = pydicom.dcmread(data_dir_path + "/stage_2_train_images/" + "/" + name)
-            X_all.append(resize(ds.pixel_array, (128,128)))
+            X_all.append(resize(ds.pixel_array, (128,128), preserve_range=True))
             pid = name.split(".")[0]
             Pid_all.append(pid)
             pid_gender[pid] = ds.PatientSex
@@ -178,13 +178,13 @@ y_test = Y_all[indices[test_start_index : n], :, :]
 pid_test = Pid_all[indices[test_start_index: n]]
 
 ## Save all the data to a file
-with open(data_dir_path + '/saved_data/data_train.pickle', 'wb') as f:
+with open(data_dir_path + '/saved_data/data_train_1.pickle', 'wb') as f:
   pickle.dump((x_train, y_train, pid_train), f, pickle.HIGHEST_PROTOCOL)
 
-with open(data_dir_path + '/saved_data/data_dev.pickle', 'wb') as f:
+with open(data_dir_path + '/saved_data/data_dev_1.pickle', 'wb') as f:
   pickle.dump((x_dev, y_dev, pid_dev), f, pickle.HIGHEST_PROTOCOL)
 
-with open(data_dir_path + '/saved_data/data_test.pickle', 'wb') as f:
+with open(data_dir_path + '/saved_data/data_test_1.pickle', 'wb') as f:
   pickle.dump((x_test, y_test, pid_test), f, pickle.HIGHEST_PROTOCOL)
 
 with open(data_dir_path + '/saved_data/data_mdata.pickle', 'wb') as f:

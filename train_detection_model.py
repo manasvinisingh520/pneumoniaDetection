@@ -13,21 +13,28 @@ from tensorflow import keras
 import tensorflow_addons as tfa
 
 reset_model = False
-model_name = 'model1_new'
-no_epochs = 5
-batch_size = 8
+model_name = 'detection_model_1'
+no_epochs = 1
+batch_size = 16
 alpha = 0.25
 gamma = 2.0
 
 
 # this is where my data is
-data_dir_path = '/Users/manasvinisingh/Projects/sf2022/data'
+#data_dir_path = '/Users/manasvinisingh/Projects/sf2022/data'
+data_dir_path = 'X:/Mannu/sf2022-new/data'
 
 #DEFINE MODEL
-from keras.layers import Conv2D, Conv2DTranspose, BatchNormalization, Activation
+from keras.layers import Conv2D, Conv2DTranspose, BatchNormalization, Activation, Flatten
 from keras.layers import Dropout, MaxPooling2D, concatenate
 from keras.layers import Input
 from keras.models import Model
+
+# cnn model
+from tensorflow.keras import datasets, layers, models
+
+#model_type = input("model type?")
+model_type = "cnn"
 
 def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
     # Function to add 2 convolutional layers with the parameters passed to it
@@ -94,24 +101,52 @@ def get_unet(input_img, n_filters=16, dropout=0.2, batchnorm=False):
     return model
 
 
+def cnn_model(input_img, n_filters=16, dropout=0.2, batchnorm=False):
+    # Contracting Path
+    c1 = conv2d_block(input_img, n_filters * 1, kernel_size=3, batchnorm=batchnorm)
+    p1 = MaxPooling2D((2, 2))(c1)
+    p1 = Dropout(dropout)(p1)
+    c2 = conv2d_block(p1, n_filters * 2, kernel_size=3, batchnorm=batchnorm)
+    p2 = MaxPooling2D((2, 2))(c2)
+    p2 = Dropout(dropout)(p2)
+    c3 = conv2d_block(p2, n_filters * 4, kernel_size=3, batchnorm=batchnorm)
+    p3 = MaxPooling2D((2, 2))(c3)
+    p3 = Dropout(dropout)(p3)
+    c4 = conv2d_block(p3, n_filters * 8, kernel_size=3, batchnorm=batchnorm)
+    c5 = Flatten()(c4)
+    outputs = layers.Dense(1, activation='sigmoid')(c5)
+
+    model = Model(inputs=[input_img], outputs=[outputs])
+    return model
+
+
 inputs = Input(shape=(128, 128, 1))
 
-if reset_model:
-  model = get_unet(inputs)
+if reset_model and model_type == "unet":
+    model = get_unet(inputs)
+elif reset_model and model_type == "cnn":
+    model = cnn_model(inputs)
 else:
-  print('loading ' + model_name)
-  model = tf.keras.models.load_model(model_name + '.h5')
+    print('loading ' + model_name)
+    model = tf.keras.models.load_model(model_name + '.h5')
 
 optimizer = tf.optimizers.Adam(learning_rate = 0.0001)
-#loss = tf.keras.losses.BinaryCrossentropy()
-loss = tfa.losses.SigmoidFocalCrossEntropy(alpha=alpha, gamma=gamma)
-#model.compile(optimizer, loss=loss, metrics=[tf.keras.metrics.BinaryAccuracy()])
-model.compile(optimizer, loss=loss, metrics=tf.keras.metrics.BinaryIoU(target_class_ids=[1]))
+loss = tf.keras.losses.BinaryCrossentropy()
+#loss = tfa.losses.SigmoidFocalCrossEntropy(alpha=alpha, gamma=gamma) #FIX IT
+model.compile(optimizer, loss=loss, metrics=[tf.keras.metrics.BinaryAccuracy()])
+#model.compile(optimizer, loss=loss, metrics=tf.keras.metrics.BinaryIoU(target_class_ids=[1]))
 
 
 # Now load the train data
-with open(data_dir_path + '/saved_data/data_train_1.pickle', 'rb') as f:
-  x_train, y_train, pid_train = pickle.load(f)
+#with open(data_dir_path + '/saved_data/data_train_1.pickle', 'rb') as f:
+  #x_train, y_train, pid_train = pickle.load(f)
+with open(data_dir_path + '/saved_data/data_train_2.pickle', 'rb') as f:
+  x_train, y_train_det, pid_train = pickle.load(f)
+
+n = y_train_det.shape[0]
+print(x_train.shape)
+print(y_train_det.shape)
+print(pid_train.shape)
 
 # just to speed up
 """n = 2000
@@ -120,21 +155,30 @@ y_train = y_train[0:n]
 pid_train = pid_train[0:n]"""
 
 ## up-sample positive examples
-upsample_by_x = 10
+upsample_by_x = 4
 n = x_train.shape[0]
 new_x_train = []
 new_y_train = []
 new_pid_train = []
 num_pos_samples = 0
+#for i in range(n):
+    #r = 1
+    #if np.sum(y_train[i]) > 0:
+        #r = upsample_by_x
+        #num_pos_samples += 1
+    #for j in range(r):
+        #new_x_train.append(x_train[i])
+        #new_y_train.append(y_train[i])
+        #new_pid_train.append(pid_train[i])
+
 for i in range(n):
     r = 1
-    if np.sum(y_train[i]) > 0:
+    if np.sum(y_train_det[i]) > 0:
         r = upsample_by_x
         num_pos_samples += 1
-
     for j in range(r):
         new_x_train.append(x_train[i])
-        new_y_train.append(y_train[i])
+        new_y_train.append(y_train_det[i])
         new_pid_train.append(pid_train[i])
 
 x_train = np.array(new_x_train)
@@ -148,8 +192,11 @@ print (x_train.shape)
 print (y_train.shape)
 print (pid_train.shape)
 
-with open(data_dir_path + '/saved_data/data_dev_1.pickle', 'rb') as f:
-  x_dev, y_dev, pid_dev = pickle.load(f)
+#with open(data_dir_path + '/saved_data/data_dev_1.pickle', 'rb') as f:
+  #x_dev, y_dev, pid_dev = pickle.load(f)
+
+with open(data_dir_path + '/saved_data/data_dev_2.pickle', 'rb') as f:
+  x_dev, y_dev_det, pid_dev = pickle.load(f)
 
 with open(data_dir_path + '/saved_data/data_mdata.pickle', 'rb') as f:
   mdata = pickle.load(f)
@@ -164,16 +211,18 @@ x_dev = x_dev.reshape((x_dev.shape[0], x_dev.shape[1], x_dev.shape[2], 1))
 print (x_train.shape)
 print (x_dev.shape)
 
+y_dev = y_dev_det
+
 # reshape y to (None, 128, 128, 1)
-y_train = np.reshape(y_train, (y_train.shape[0], y_train.shape[1], y_train.shape[2], 1))
-y_dev = np.reshape(y_dev, (y_dev.shape[0], y_dev.shape[1], y_dev.shape[2], 1))
+#y_train = np.reshape(y_train, (y_train.shape[0], y_train.shape[1], y_train.shape[2], 1))
+# y_dev = np.reshape(y_dev, (y_dev.shape[0], y_dev.shape[1], y_dev.shape[2], 1))
 
 # tensorboard stuff
 
 #MODEL TRAINING
-model.fit(x_train, y_train, validation_data=(x_dev, y_dev),
-          batch_size=batch_size, epochs=no_epochs, callbacks=[])
-model.save(model_name + '.h5')
+#model.fit(x_train, y_train, validation_data=(x_dev, y_dev),
+#          batch_size=batch_size, epochs=no_epochs, callbacks=[])
+#model.save(model_name + '.h5')
 
 # Load and predict again
 model.evaluate(x_train, y_train, batch_size=batch_size)
